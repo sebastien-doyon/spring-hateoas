@@ -221,46 +221,49 @@ public class ControllerLinkBuilder extends LinkBuilderSupport<ControllerLinkBuil
 	static UriComponentsBuilder getBuilder() {
 
 		HttpServletRequest request = getCurrentRequest();
-		ServletUriComponentsBuilder builder = ServletUriComponentsBuilder.fromServletMapping(request);
+				
+		ServletUriComponentsBuilder builder = (ServletUriComponentsBuilder) request.getAttribute(ServletUriComponentsBuilder.class.getName());
+				
+		if (builder == null) {
+			builder = ServletUriComponentsBuilder.fromServletMapping(request);
 
-		ForwardedHeader forwarded = ForwardedHeader.of(request.getHeader(ForwardedHeader.NAME));
-		String proto = hasText(forwarded.getProto()) ? forwarded.getProto() : request.getHeader("X-Forwarded-Proto");
-		String forwardedSsl = request.getHeader("X-Forwarded-Ssl");
-
-		if (hasText(proto)) {
-			builder.scheme(proto);
-		} else if (hasText(forwardedSsl) && forwardedSsl.equalsIgnoreCase("on")) {
-			builder.scheme("https");
+			ForwardedHeader forwarded = ForwardedHeader.of(request.getHeader(ForwardedHeader.NAME));
+			String proto = hasText(forwarded.getProto()) ? forwarded.getProto() : request.getHeader("X-Forwarded-Proto");
+			String forwardedSsl = request.getHeader("X-Forwarded-Ssl");
+	
+			if (hasText(proto)) {
+				builder.scheme(proto);
+			} else if (hasText(forwardedSsl) && forwardedSsl.equalsIgnoreCase("on")) {
+				builder.scheme("https");
+			}
+	
+			String host = forwarded.getHost();
+			host = hasText(host) ? host : request.getHeader("X-Forwarded-Host");
+	
+			if (hasText(host)) {	
+				String[] hosts = commaDelimitedListToStringArray(host);
+				String hostToUse = hosts[0];
+		
+				if (hostToUse.contains(":")) {
+		
+					String[] hostAndPort = split(hostToUse, ":");
+		
+					builder.host(hostAndPort[0]);
+					builder.port(Integer.parseInt(hostAndPort[1]));
+		
+				} else {
+					builder.host(hostToUse);
+					builder.port(-1); // reset port if it was forwarded from default port
+				}
+		
+				String port = request.getHeader("X-Forwarded-Port");
+		
+				if (hasText(port)) {
+					builder.port(Integer.parseInt(port));
+				}
+			}
+			request.setAttribute(ServletUriComponentsBuilder.class.getName(), builder);
 		}
-
-		String host = forwarded.getHost();
-		host = hasText(host) ? host : request.getHeader("X-Forwarded-Host");
-
-		if (!hasText(host)) {
-			return builder;
-		}
-
-		String[] hosts = commaDelimitedListToStringArray(host);
-		String hostToUse = hosts[0];
-
-		if (hostToUse.contains(":")) {
-
-			String[] hostAndPort = split(hostToUse, ":");
-
-			builder.host(hostAndPort[0]);
-			builder.port(Integer.parseInt(hostAndPort[1]));
-
-		} else {
-			builder.host(hostToUse);
-			builder.port(-1); // reset port if it was forwarded from default port
-		}
-
-		String port = request.getHeader("X-Forwarded-Port");
-
-		if (hasText(port)) {
-			builder.port(Integer.parseInt(port));
-		}
-
 		return builder;
 	}
 
